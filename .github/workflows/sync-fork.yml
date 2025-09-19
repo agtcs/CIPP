@@ -1,0 +1,44 @@
+name: Sync fork with upstream
+
+on:
+  schedule:
+    - cron: '15 3 * * *'   # runs daily at 03:15 UTC
+  workflow_dispatch:        # lets you run it manually
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Configure git user
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Add upstream & fetch
+        run: |
+          git remote add upstream https://github.com/KelvinTegelaar/CIPP.git
+          git fetch upstream
+
+      - name: Fast-forward main from upstream/main (no conflicts)
+        run: |
+          git checkout main
+          # Try a clean fast-forward; if it can't, don't fail the job.
+          git merge --ff-only upstream/main || echo "No FF possible; will open PR instead."
+
+      - name: Push if updated
+        run: |
+          git push origin main || echo "Nothing to push."
+
+      - name: If not fast-forwardable, create a PR
+        if: ${{ failure() || steps.ff_outcome.conclusion == 'failure' }}
+        uses: peter-evans/create-pull-request@v6
+        with:
+          commit-message: "Sync: merge upstream/main into main"
+          title: "Sync fork: upstream → main"
+          body: "Automated sync from KelvinTegelaar/CIPP."
+          branch: "sync/upstream-merge"
+          base: "main"
